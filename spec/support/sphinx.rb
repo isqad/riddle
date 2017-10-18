@@ -1,6 +1,6 @@
 require 'erb'
 require 'yaml'
-require 'fileutils'
+require 'tempfile'
 
 if RUBY_PLATFORM == 'java'
   require 'java'
@@ -18,23 +18,15 @@ class Sphinx
   attr_accessor :host, :username, :password
 
   def initialize
-    setup_sql_fixtures
-
     self.host     = 'localhost'
     self.username = 'root'
     self.password = ''
 
-    if File.exist?('/tmp/riddle-conf.yml')
-      config    = YAML.load(File.open('/tmp/riddle-conf.yml'))
+    if File.exist?('spec/fixtures/sql/conf.yml')
+      config    = YAML.load(File.open('spec/fixtures/sql/conf.yml'))
       self.host     = config['host']
       self.username = config['username']
       self.password = config['password']
-    end
-  end
-
-  def setup_sql_fixtures
-    Dir["spec/fixtures/sql/*"].each do |file|
-      FileUtils.cp file, "/tmp/riddle-#{File.basename(file)}"
     end
   end
 
@@ -54,14 +46,16 @@ class Sphinx
 
     client.query 'USE riddle'
 
-    structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
+    structure = File.open('spec/fixtures/sql/structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.query sql }
-    client.query <<-SQL
-      #{FIXTURE_COMMAND} '/tmp/riddle-data.tsv' INTO TABLE
-      `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
-      first_name, middle_initial, last_name, street_address, city, state,
-      postcode, email, birthday)
-    SQL
+    sql_file 'data.tsv' do |path|
+      client.query <<-SQL
+        #{FIXTURE_COMMAND} '#{path}' INTO TABLE
+        `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
+        first_name, middle_initial, last_name, street_address, city, state,
+        postcode, email, birthday)
+      SQL
+    end
 
     client.close
   end
@@ -84,14 +78,16 @@ class Sphinx
 
     client.createStatement.execute 'USE riddle'
 
-    structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
+    structure = File.open('spec/fixtures/sql/structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.createStatement.execute sql }
-    client.createStatement.execute <<-SQL
-      #{FIXTURE_COMMAND} '/tmp/riddle-data.tsv' INTO TABLE
-      `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
-      first_name, middle_initial, last_name, street_address, city, state,
-      postcode, email, birthday)
-    SQL
+    sql_file 'data.tsv' do |path|
+      client.createStatement.execute <<-SQL
+        #{FIXTURE_COMMAND} '#{path}' INTO TABLE
+        `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
+        first_name, middle_initial, last_name, street_address, city, state,
+        postcode, email, birthday)
+      SQL
+    end
   end
 
   def generate_configuration
@@ -131,6 +127,18 @@ class Sphinx
 
   private
 
+  def bin_path
+    @bin_path ||= begin
+      path = (ENV['SPHINX_BIN'] || '').dup
+      path.insert -1, '/' if path.length > 0 && path[/\/$/].nil?
+      path
+    end
+  end
+
+  def fixtures_path
+    File.expand_path File.join(File.dirname(__FILE__), '..', 'fixtures')
+  end
+
   def pid
     if File.exists?("#{fixtures_path}/sphinx/searchd.pid")
       `cat #{fixtures_path}/sphinx/searchd.pid`[/\d+/]
@@ -143,15 +151,14 @@ class Sphinx
     pid && `ps #{pid} | wc -l`.to_i > 1
   end
 
-  def fixtures_path
-    File.expand_path File.join(File.dirname(__FILE__), '..', 'fixtures')
-  end
+  def sql_file(name, &block)
+    file = Tempfile.new(name)
+    file.write File.read("#{fixtures_path}/sql/#{name}")
+    file.flush
 
-  def bin_path
-    @bin_path ||= begin
-      path = (ENV['SPHINX_BIN'] || '').dup
-      path.insert -1, '/' if path.length > 0 && path[/\/$/].nil?
-      path
-    end
+    block.call file.path
+
+    file.close
+    file.unlink
   end
 end
