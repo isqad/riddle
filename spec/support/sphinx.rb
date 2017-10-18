@@ -57,7 +57,7 @@ class Sphinx
     structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.query sql }
     client.query <<-SQL
-      #{FIXTURE_COMMAND} '#{fixtures_path}/sql/data.tsv' INTO TABLE
+      #{FIXTURE_COMMAND} '/tmp/riddle-data.tsv' INTO TABLE
       `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
       first_name, middle_initial, last_name, street_address, city, state,
       postcode, email, birthday)
@@ -87,7 +87,7 @@ class Sphinx
     structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.createStatement.execute sql }
     client.createStatement.execute <<-SQL
-      #{FIXTURE_COMMAND} '#{fixtures_path}/sql/data.tsv' INTO TABLE
+      #{FIXTURE_COMMAND} '/tmp/riddle-data.tsv' INTO TABLE
       `riddle`.`people` FIELDS TERMINATED BY ',' ENCLOSED BY "'" (gender,
       first_name, middle_initial, last_name, street_address, city, state,
       postcode, email, birthday)
