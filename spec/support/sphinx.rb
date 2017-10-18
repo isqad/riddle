@@ -154,6 +154,7 @@ class Sphinx
   def sql_file(name, &block)
     file = Tempfile.new(name)
     file.write File.read("#{fixtures_path}/sql/#{name}")
+    `chmod +r #{file.path}`
     file.flush
 
     block.call file.path
