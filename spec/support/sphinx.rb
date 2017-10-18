@@ -1,5 +1,6 @@
 require 'erb'
 require 'yaml'
+require 'fileutils'
 
 if RUBY_PLATFORM == 'java'
   require 'java'
@@ -17,15 +18,23 @@ class Sphinx
   attr_accessor :host, :username, :password
 
   def initialize
+    setup_sql_fixtures
+
     self.host     = 'localhost'
     self.username = 'root'
     self.password = ''
 
-    if File.exist?('spec/fixtures/sql/conf.yml')
-      config    = YAML.load(File.open('spec/fixtures/sql/conf.yml'))
+    if File.exist?('/tmp/riddle-conf.yml')
+      config    = YAML.load(File.open('/tmp/riddle-conf.yml'))
       self.host     = config['host']
       self.username = config['username']
       self.password = config['password']
+    end
+  end
+
+  def setup_sql_fixtures
+    Dir["spec/fixtures/sql/*"].each do |file|
+      FileUtils.cp file, "/tmp/riddle-#{File.basename(file)}"
     end
   end
 
@@ -45,7 +54,7 @@ class Sphinx
 
     client.query 'USE riddle'
 
-    structure = File.open('spec/fixtures/sql/structure.sql') { |f| f.read }
+    structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.query sql }
     client.query <<-SQL
       #{FIXTURE_COMMAND} '#{fixtures_path}/sql/data.tsv' INTO TABLE
@@ -75,7 +84,7 @@ class Sphinx
 
     client.createStatement.execute 'USE riddle'
 
-    structure = File.open('spec/fixtures/sql/structure.sql') { |f| f.read }
+    structure = File.open('/tmp/riddle-structure.sql') { |f| f.read }
     structure.split(/;/).each { |sql| client.createStatement.execute sql }
     client.createStatement.execute <<-SQL
       #{FIXTURE_COMMAND} '#{fixtures_path}/sql/data.tsv' INTO TABLE
